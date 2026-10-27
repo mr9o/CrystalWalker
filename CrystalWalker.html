@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Crystal Walker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{
+  --bg:#0b0f17; --panel:rgba(16,22,34,.88); --panel-solid:#101622; --fg:#e8edf5; --muted:#9aa6b8;
+  --line:rgba(255,255,255,.12); --accent:#5cc8ff; --accent-fg:#06121c; --warn:#ffcc66; --sel:#ffe14d; color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#0b0f17; --panel:rgba(250,251,253,.92); --panel-solid:#fafbfd; --fg:#1a2230; --muted:#5b677a;
+    --line:rgba(0,0,0,.12); --accent:#0a78c2; --accent-fg:#ffffff; --warn:#a35f00; --sel:#b38f00; color-scheme:light;
+  }
+}
+:root[data-theme="light"]{
+    --bg:#0b0f17; --panel:rgba(250,251,253,.92); --panel-solid:#fafbfd; --fg:#1a2230; --muted:#5b677a;
+    --line:rgba(0,0,0,.12); --accent:#0a78c2; --accent-fg:#ffffff; --warn:#a35f00; --sel:#b38f00; color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+  font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+canvas{display:block;touch-action:none}
+#panel{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));width:min(300px,calc(100vw - 32px));max-height:calc(100vh - 90px);
+  overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+  backdrop-filter:blur(8px);z-index:5}
+#panel.collapsed #pbody{display:none}
+.hdr{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hdr b{font-size:15px;letter-spacing:.2px}
+button,select,input[type=number]{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);
+  border-radius:8px;padding:5px 8px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+select option{background:var(--panel-solid);color:var(--fg)}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+.row>label{flex:1;min-width:0}
+.lbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px;margin-top:12px}
+input[type=number]{width:52px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.file{display:inline-block;flex:1;text-align:center;background:var(--accent);color:var(--accent-fg);font-weight:600;
+  padding:6px 8px;border-radius:8px;cursor:pointer}
+.file input{display:none}
+#meta,#sel{font-size:13px;margin-top:8px}
+#meta .k{color:var(--muted)}
+#sel{border-top:1px solid var(--line);padding-top:8px}
+#sel .m{color:var(--sel);font-weight:600}
+.warn{color:var(--warn)}
+details{margin-top:10px;font-size:13px}
+summary{cursor:pointer;color:var(--muted)}
+kbd{border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:12px}
+#crosshair{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;display:none;z-index:4}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:#fff;opacity:.85}
+#crosshair:before{left:6px;top:0;width:2px;height:14px}
+#crosshair:after{top:6px;left:0;height:2px;width:14px}
+#hover{position:fixed;pointer-events:none;background:rgba(10,14,22,.85);color:#fff;padding:3px 8px;border-radius:6px;
+  font-size:13px;display:none;z-index:4;white-space:nowrap}
+#msg{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));max-width:min(360px,calc(100vw - 32px));background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:none;z-index:6}
+#drop{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:22px;
+  background:rgba(10,120,194,.35);border:3px dashed #fff;color:#fff;z-index:10}
+#touchpad{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(80px + env(safe-area-inset-bottom,0px));display:none;flex-direction:column;gap:10px;z-index:5}
+#touchpad button{width:56px;height:56px;border-radius:50%;background:var(--panel);font-size:20px}
+@media (hover:none){#touchpad{display:flex}}
+</style>
+
+<div id="panel">
+  <div class="hdr"><b>Crystal Walker</b><button id="collapse" title="Comprimi pannello">–</button></div>
+  <div id="pbody">
+    <div class="row">
+      <label class="file">Apri file CIF…<input type="file" id="file" accept=".cif,.CIF,text/plain"></label>
+    </div>
+    <div class="row">
+      <select id="example" style="flex:1">
+        <option value="">Esempi integrati…</option>
+        <option value="rutile">TiO₂ rutilo (P4₂/mnm)</option>
+        <option value="ceo2">CeO₂ fluorite</option>
+        <option value="pt">Pt (fcc)</option>
+      </select>
+    </div>
+    <div id="meta"></div>
+
+    <div class="lbl">Supercella</div>
+    <div class="row">
+      a <input type="number" id="nx" min="1" max="10" value="3">
+      b <input type="number" id="ny" min="1" max="10" value="3">
+      c <input type="number" id="nz" min="1" max="10" value="3">
+    </div>
+    <div class="lbl">Visualizzazione</div>
+    <div class="row">
+      <select id="style" style="flex:1">
+        <option value="bs">Sfere e bastoncini</option>
+        <option value="sf">Riempimento spaziale</option>
+        <option value="st">Solo bastoncini</option>
+      </select>
+    </div>
+    <div class="row"><label><input type="checkbox" id="showCell" checked> Cella</label>
+      <label><input type="checkbox" id="boundary" checked> Atomi al bordo</label></div>
+    <div class="row"><label><input type="checkbox" id="mm"> Legami metallo–metallo</label></div>
+    <div class="row" style="display:block">Tolleranza legami: <span id="tolv">1.15</span>
+      <input type="range" id="tol" min="0.9" max="1.5" step="0.01" value="1.15"></div>
+
+    <div class="lbl">Navigazione</div>
+    <div class="row" style="display:block">Velocità: <span id="spdv">1.0</span>×
+      <input type="range" id="spd" min="0.1" max="5" step="0.1" value="1"></div>
+    <div class="row"><span id="scaleLbl" style="flex:1"></span>
+      <button id="zout" title="Rimpicciolisci">−</button><button id="zin" title="Ingrandisci">+</button></div>
+    <div class="row">
+      <button id="lock" class="primary" style="flex:1">Prima persona</button>
+      <button id="reset">Reset vista</button>
+    </div>
+    <div id="sel"><span style="color:var(--muted)">Clicca un atomo per selezionarlo. 2 atomi → distanza, 3 → angolo.</span></div>
+    <details>
+      <summary>Comandi</summary>
+      <p><b>PC</b>: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> muovi · <kbd>E</kbd>/<kbd>Spazio</kbd> su · <kbd>Q</kbd>/<kbd>C</kbd> giù ·
+        <kbd>Shift</kbd> veloce · trascina per guardare · rotella = ingrandisci/rimpicciolisci la struttura ·
+        <kbd>R</kbd> reset · <kbd>Esc</kbd> sblocca mouse.</p>
+      <p><b>Visore VR</b>: stick sinistro = muovi nella direzione dello sguardo · stick destro ↕ = scala, ↔ = rotazione ·
+        <kbd>A</kbd>/<kbd>X</kbd> su, <kbd>B</kbd>/<kbd>Y</kbd> giù · grilletto = seleziona atomo.</p>
+      <p><b>Touch</b>: trascina per guardare, pizzica per scalare, pulsanti ▲▼ per muoverti.</p>
+    </details>
+  </div>
+</div>
+<div id="crosshair"></div>
+<div id="hover"></div>
+<div id="msg"></div>
+<div id="drop">Rilascia qui il file CIF</div>
+<div id="touchpad"><button data-k="KeyW">▲</button><button data-k="KeyS">▼</button></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+/* ================= Element data (Jmol colours, Cordero covalent radii, Å) ================= */
+const EL_RAW = `H FFFFFF .31|He D9FFFF .28|Li CC80FF 1.28|Be C2FF00 .96|B FFB5B5 .84|C 909090 .76|N 3050F8 .71|O FF0D0D .66|F 90E050 .57|Ne B3E3F5 .58|Na AB5CF2 1.66|Mg 8AFF00 1.41|Al BFA6A6 1.21|Si F0C8A0 1.11|P FF8000 1.07|S FFFF30 1.05|Cl 1FF01F 1.02|Ar 80D1E3 1.06|K 8F40D4 2.03|Ca 3DFF00 1.76|Sc E6E6E6 1.70|Ti BFC2C7 1.60|V A6A6AB 1.53|Cr 8A99C7 1.39|Mn 9C7AC7 1.39|Fe E06633 1.32|Co F090A0 1.26|Ni 50D050 1.24|Cu C88033 1.32|Zn 7D80B0 1.22|Ga C28F8F 1.22|Ge 668F8F 1.20|As BD80E3 1.19|Se FFA100 1.20|Br A62929 1.20|Kr 5CB8D1 1.16|Rb 702EB0 2.20|Sr 00FF00 1.95|Y 94FFFF 1.90|Zr 94E0E0 1.75|Nb 73C2C9 1.64|Mo 54B5B5 1.54|Tc 3B9E9E 1.47|Ru 248F8F 1.46|Rh 0A7D8C 1.42|Pd 006985 1.39|Ag C0C0C0 1.45|Cd FFD98F 1.44|In A67573 1.42|Sn 668080 1.39|Sb 9E63B5 1.39|Te D47A00 1.38|I 940094 1.39|Xe 429EB0 1.40|Cs 57178F 2.44|Ba 00C900 2.15|La 70D4FF 2.07|Ce FFFFC7 2.04|Pr D9FFC7 2.03|Nd C7FFC7 2.01|Sm 8FFFC7 1.98|Eu 61FFC7 1.98|Gd 45FFC7 1.96|Tb 30FFC7 1.94|Dy 1FFFC7 1.92|Ho 00FF9C 1.92|Er 00E675 1.89|Tm 00D452 1.90|Yb 00BF38 1.87|Lu 00AB24 1.87|Hf 4DC2FF 1.75|Ta 4DA6FF 1.70|W 2194D6 1.62|Re 267DAB 1.51|Os 266696 1.44|Ir 175487 1.41|Pt D0D0E0 1.36|Au FFD123 1.36|Hg B8B8D0 1.32|Tl A6544D 1.45|Pb 575961 1.46|Bi 9E4FB5 1.48|Th 00BAFF 2.06|U 008FFF 1.96`;
+const ELEMENTS = {};
+EL_RAW.split('|').forEach(s => { const [e, c, r] = s.trim().split(/\s+/); ELEMENTS[e] = { color: parseInt(c, 16), rcov: parseFloat(r) }; });
+const NONMETALS = new Set(['H','B','C','N','O','F','Si','P','S','Cl','Se','Br','I','Te','As','He','Ne','Ar','Kr','Xe']);
+const elInfo = e => ELEMENTS[e] || { color: 0xff1493, rcov: 1.5 };
+
+function elementFrom(sym, label) {
+  for (const s of [sym, label]) {
+    if (!s) continue;
+    const m = String(s).match(/^([A-Za-z]{1,2})/); if (!m) continue;
+    const t = m[1];
+    const one = t[0].toUpperCase();
+    const two = one + (t.length > 1 ? t[1].toLowerCase() : '');
+    if (t.length > 1 && ELEMENTS[two]) return two;
+    if (ELEMENTS[one]) return one;
+  }
+  return 'X';
+}
+
+/* ================= CIF parser ================= */
+function tokenizeCIF(text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  const toks = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith(';')) {
+      const buf = [line.slice(1)]; i++;
+      while (i < lines.length && !lines[i].startsWith(';')) { buf.push(lines[i]); i++; }
+      toks.push({ v: buf.join('\n'), q: true }); continue;
+    }
+    const re = /'([^']*)'(?=\s|$)|"([^"]*)"(?=\s|$)|(\S+)/g; let m;
+    while ((m = re.exec(line))) {
+      if (m[3] !== undefined) { if (m[3].startsWith('#')) break; toks.push({ v: m[3], q: false }); }
+      else toks.push({ v: m[1] !== undefined ? m[1] : m[2], q: true });
+    }
+  }
+  return toks;
+}
+const normTag = t => t.toLowerCase().replace(/\./g, '_');
+function parseCIF(text) {
+  const toks = tokenizeCIF(text), blocks = [];
+  let cur = null, k = 0;
+  const isTag = t => !t.q && t.v.startsWith('_');
+  const isKw = t => !t.q && /^(loop_|data_|save_|global_|stop_)/i.test(t.v);
+  while (k < toks.length) {
+    const t = toks[k];
+    if (!t.q && /^data_/i.test(t.v)) { cur = { name: t.v.slice(5), items: {}, loops: [] }; blocks.push(cur); k++; continue; }
+    if (!cur) { cur = { name: '', items: {}, loops: [] }; blocks.push(cur); }
+    if (!t.q && /^loop_$/i.test(t.v)) {
+      k++; const tags = [];
+      while (k < toks.length && isTag(toks[k])) { tags.push(normTag(toks[k].v)); k++; }
+      const vals = [];
+      while (k < toks.length && !isTag(toks[k]) && !isKw(toks[k])) { vals.push(toks[k].v); k++; }
+      if (tags.length) {
+        const rows = [];
+        for (let r = 0; r + tags.length <= vals.length; r += tags.length) rows.push(vals.slice(r, r + tags.length));
+        cur.loops.push({ tags, rows });
+      }
+      continue;
+    }
+    if (isTag(t)) {
+      const nx = toks[k + 1];
+      if (nx && !isTag(nx) && !isKw(nx)) { cur.items[normTag(t.v)] = nx.v; k += 2; } else k++;
+      continue;
+    }
+    k++;
+  }
+  return blocks;
+}
+const num = s => (s == null ? NaN : parseFloat(String(s).replace(/\([^)]*\)/g, '')));
+const fracNum = s => { if (s.includes('/')) { const [a, b] = s.split('/'); return parseFloat(a) / parseFloat(b); } return parseFloat(s); };
+
+function parseSymop(str) {
+  const parts = String(str).toLowerCase().replace(/\s+/g, '').split(',');
+  if (parts.length !== 3) return null;
+  const R = [], t = [];
+  for (const p of parts) {
+    const row = [0, 0, 0]; let c = 0;
+    const s = /^[+-]/.test(p) ? p : '+' + p;
+    const terms = s.match(/[+-][^+-]+/g) || [];
+    for (const term of terms) {
+      const sign = term[0] === '-' ? -1 : 1;
+      const body = term.slice(1).replace('*', '');
+      const m = body.match(/[xyz]/);
+      if (m) { const coef = body.replace(m[0], ''); row['xyz'.indexOf(m[0])] += sign * (coef === '' ? 1 : fracNum(coef)); }
+      else c += sign * fracNum(body);
+    }
+    if (row.some(isNaN) || isNaN(c)) return null;
+    R.push(row); t.push(c);
+  }
+  return { R, t };
+}
+function nearFrac(q, p) {
+  for (let i = 0; i < 3; i++) { let d = q[i] - p[i]; d -= Math.round(d); if (Math.abs(d) > 2e-3) return false; }
+  return true;
+}
+function cellMatrix(a, b, c, al, be, ga) {
+  const d = Math.PI / 180, ca = Math.cos(al * d), cb = Math.cos(be * d), cg = Math.cos(ga * d), sg = Math.sin(ga * d);
+  const cy = c * (ca - cb * cg) / sg;
+  const cz = Math.sqrt(Math.max(c * c - (c * cb) ** 2 - cy * cy, 1e-9));
+  return [[a, b * cg, c * cb], [0, b * sg, cy], [0, 0, cz]];
+}
+const f2c = (M, f) => new THREE.Vector3(
+  M[0][0] * f[0] + M[0][1] * f[1] + M[0][2] * f[2],
+  M[1][0] * f[0] + M[1][1] * f[1] + M[1][2] * f[2],
+  M[2][0] * f[0] + M[2][1] * f[1] + M[2][2] * f[2]);
+
+function buildCrystal(text) {
+  const blocks = parseCIF(text);
+  const block = blocks.find(b => b.loops.some(L => L.tags.includes('_atom_site_fract_x')));
+  if (!block) throw new Error('Nessun blocco con coordinate frazionarie (_atom_site_fract_x) trovato. I file mmCIF/PDB con coordinate cartesiane non sono supportati.');
+  const it = block.items;
+  const a = num(it._cell_length_a), b = num(it._cell_length_b), c = num(it._cell_length_c);
+  const al = num(it._cell_angle_alpha) || 90, be = num(it._cell_angle_beta) || 90, ga = num(it._cell_angle_gamma) || 90;
+  if (!(a > 0 && b > 0 && c > 0)) throw new Error('Parametri di cella (_cell_length_a/b/c) mancanti.');
+
+  const symTags = ['_symmetry_equiv_pos_as_xyz', '_space_group_symop_operation_xyz'];
+  let ops = [];
+  for (const L of block.loops) {
+    const idx = L.tags.findIndex(t => symTags.includes(t));
+    if (idx >= 0) { ops = L.rows.map(r => parseSymop(r[idx])).filter(Boolean); break; }
+  }
+  if (!ops.length) for (const t of symTags) if (it[t]) { const o = parseSymop(it[t]); if (o) ops = [o]; }
+  let symWarn = false;
+  if (!ops.length) { ops = [parseSymop('x,y,z')]; symWarn = true; }
+
+  const L = block.loops.find(L => L.tags.includes('_atom_site_fract_x'));
+  const T = n => L.tags.indexOf(n);
+  const ix = T('_atom_site_fract_x'), iy = T('_atom_site_fract_y'), iz = T('_atom_site_fract_z');
+  const il = T('_atom_site_label'), its = T('_atom_site_type_symbol'), io = T('_atom_site_occupancy');
+  const sites = [];
+  for (const r of L.rows) {
+    const f = [num(r[ix]), num(r[iy]), num(r[iz])];
+    if (f.some(isNaN)) continue;
+    const label = il >= 0 ? r[il] : (its >= 0 ? r[its] : 'X');
+    const occ = io >= 0 && !isNaN(num(r[io])) ? num(r[io]) : 1;
+    sites.push({ label, el: elementFrom(its >= 0 ? r[its] : null, label), occ, f });
+  }
+  if (!sites.length) throw new Error('Nessun atomo valido nel file.');
+  const atoms = [];
+  for (const s of sites) {
+    const list = [];
+    for (const op of ops) {
+      const p = [0, 1, 2].map(i => op.R[i][0] * s.f[0] + op.R[i][1] * s.f[1] + op.R[i][2] * s.f[2] + op.t[i]);
+      for (let i = 0; i < 3; i++) { p[i] -= Math.floor(p[i]); if (p[i] > 1 - 1e-4) p[i] = 0; }
+      if (!list.some(q => nearFrac(q, p))) list.push(p);
+    }
+    for (const p of list) atoms.push({ label: s.label, el: s.el, occ: s.occ, f: p });
+  }
+  const sg = it['_symmetry_space_group_name_h-m'] || it['_space_group_name_h-m_alt'] || it['_space_group_name_h-m'] || '';
+  const name = it._chemical_name_mineral || it._chemical_name_systematic || it._chemical_name_common || block.name;
+  return { name, sg, a, b, c, al, be, ga, M: cellMatrix(a, b, c, al, be, ga), atoms, nOps: ops.length, symWarn };
+}
+
+function formulaOf(atoms) {
+  const cnt = {};
+  atoms.forEach(a => cnt[a.el] = (cnt[a.el] || 0) + a.occ);
+  const els = Object.keys(cnt).sort((x, y) => {
+    const r = e => NONMETALS.has(e) ? 1 : 0;   // cations first, anions last (e.g. TiO2, CeO2)
+    return r(x) - r(y) || x.localeCompare(y);
+  });
+  const vals = els.map(e => cnt[e]);
+  let g = 0;
+  if (vals.every(v => Math.abs(v - Math.round(v)) < 0.01)) {
+    const gcd = (x, y) => y ? gcd(y, x % y) : x;
+    g = vals.map(Math.round).reduce(gcd);
+  }
+  return els.map((e, i) => { const v = g ? Math.round(vals[i]) / g : +vals[i].toFixed(2); return e + (v === 1 ? '' : `<sub>${v}</sub>`); }).join('');
+}
+
+/* ================= Built-in examples ================= */
+const EXAMPLES = {
+rutile: `data_rutile
+_chemical_name_mineral Rutile
+_cell_length_a 4.5937
+_cell_length_b 4.5937
+_cell_length_c 2.9587
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_symmetry_space_group_name_H-M 'P 42/m n m'
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+'-x, -y, z'
+'-y+1/2, x+1/2, z+1/2'
+'y+1/2, -x+1/2, z+1/2'
+'-x+1/2, y+1/2, -z+1/2'
+'x+1/2, -y+1/2, -z+1/2'
+'y, x, -z'
+'-y, -x, -z'
+'-x, -y, -z'
+'x, y, -z'
+'y+1/2, -x+1/2, -z+1/2'
+'-y+1/2, x+1/2, -z+1/2'
+'x+1/2, -y+1/2, z+1/2'
+'-x+1/2, y+1/2, z+1/2'
+'-y, -x, z'
+'y, x, z'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_occupancy
+Ti1 Ti4+ 0 0 0 1
+O1 O2- 0.30478(6) 0.30478(6) 0 1
+`,
+ceo2: `data_CeO2
+_chemical_name_common 'Cerium dioxide (fluorite)'
+_cell_length_a 5.411
+_cell_length_b 5.411
+_cell_length_c 5.411
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_symmetry_space_group_name_H-M 'F m -3 m (espanso in P1)'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Ce1 Ce 0 0 0
+Ce2 Ce 0 0.5 0.5
+Ce3 Ce 0.5 0 0.5
+Ce4 Ce 0.5 0.5 0
+O1 O 0.25 0.25 0.25
+O2 O 0.75 0.25 0.25
+O3 O 0.25 0.75 0.25
+O4 O 0.25 0.25 0.75
+O5 O 0.75 0.75 0.25
+O6 O 0.75 0.25 0.75
+O7 O 0.25 0.75 0.75
+O8 O 0.75 0.75 0.75
+`,
+pt: `data_Pt
+_chemical_name_common Platinum
+_cell_length_a 3.924
+_cell_length_b 3.924
+_cell_length_c 3.924
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_symmetry_space_group_name_H-M 'F m -3 m (espanso in P1)'
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Pt1 0 0 0
+Pt2 0 0.5 0.5
+Pt3 0.5 0 0.5
+Pt4 0.5 0.5 0
+`};
+
+/* ================= Three.js scene ================= */
+const $ = id => document.getElementById(id);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0f17);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 2000);
+const dolly = new THREE.Group(); dolly.add(camera); scene.add(dolly);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x2a3344, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(0.6, 0.8, 0.3); camera.add(sun); sun.target.position.set(0, 0, -1); camera.add(sun.target);
+const grid = new THREE.GridHelper(20, 40, 0x335577, 0x1d2a3a); grid.visible = false; scene.add(grid);
+
+const world = new THREE.Group(); scene.add(world);             // position + uniform scale (metres per Å)
+const inner = new THREE.Group(); inner.rotation.x = -Math.PI / 2; world.add(inner); // crystal c-axis → up
+const content = new THREE.Group(); inner.add(content);           // centred crystal, units = Å
+
+const sphereGeo = new THREE.SphereGeometry(1, 24, 16);
+const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, true);
+const atomMat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.08 });
+const bondMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.05 });
+
+let crystal = null, atoms = [], pos = null, rad = null, structSize = 10;
+
+function opts() {
+  const n = ['nx', 'ny', 'nz'].map(id => Math.max(1, Math.min(10, parseInt($(id).value) || 1)));
+  return { n, style: $('style').value, tol: parseFloat($('tol').value), boundary: $('boundary').checked, cell: $('showCell').checked, mm: $('mm').checked };
+}
+function atomRadius(el, style) {
+  const r = elInfo(el).rcov;
+  return style === 'sf' ? r * 1.05 : style === 'st' ? 0.14 : 0.2 + 0.22 * r;
+}
+function clearContent() {
+  for (const ch of [...content.children]) {
+    content.remove(ch);
+    if (ch.isInstancedMesh) ch.dispose();
+    if (ch.geometry && ch.geometry !== sphereGeo && ch.geometry !== cylGeo) ch.geometry.dispose();
+  }
+}
+
+function rebuild(keepView = false) {
+  if (!crystal) return;
+  const o = opts(), M = crystal.M;
+  const est = crystal.atoms.length * o.n[0] * o.n[1] * o.n[2];
+  if (est > 250000) { msg(`Supercella troppo grande (~${est.toLocaleString()} atomi). Riduci a, b o c.`, true); return; }
+  clearContent(); clearSelection();
+
+  // generate atoms of the supercell
+  atoms = [];
+  const tol = 0.02;
+  for (const at of crystal.atoms) {
+    const ax = [0, 1, 2].map(i => { const v = []; for (let k = 0; k < o.n[i]; k++) v.push(at.f[i] + k); if (o.boundary && at.f[i] < tol) v.push(at.f[i] + o.n[i]); return v; });
+    for (const x of ax[0]) for (const y of ax[1]) for (const z of ax[2])
+      atoms.push({ ...at, fs: [x, y, z], c: f2c(M, [x, y, z]) });
+  }
+  const N = atoms.length;
+  pos = new Float32Array(N * 3); rad = new Float32Array(N);
+  const mat = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), col = new THREE.Color();
+  const mesh = new THREE.InstancedMesh(sphereGeo, atomMat, N);
+  atoms.forEach((a, i) => {
+    const r = atomRadius(a.el, o.style); rad[i] = r; a.r = r;
+    pos[i * 3] = a.c.x; pos[i * 3 + 1] = a.c.y; pos[i * 3 + 2] = a.c.z;
+    mat.compose(a.c, q.identity(), s.setScalar(r)); mesh.setMatrixAt(i, mat);
+    mesh.setColorAt(i, col.setHex(elInfo(a.el).color));
+  });
+  mesh.computeBoundingSphere();
+  content.add(mesh);
+
+  // bonds
+  let nb = 0;
+  if (o.style !== 'sf') {
+    const bonds = computeBonds(atoms, o.tol, o.mm);
+    nb = bonds.length;
+    if (nb) {
+      const bm = new THREE.InstancedMesh(cylGeo, bondMat, nb * 2);
+      const br = o.style === 'st' ? 0.14 : 0.11;
+      const Y = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), p = new THREE.Vector3();
+      let k = 0;
+      for (const [i, j] of bonds) {
+        const A = atoms[i].c, B = atoms[j].c;
+        d.subVectors(B, A); const len = d.length(); d.divideScalar(len);
+        q.setFromUnitVectors(Y, d);
+        s.set(br, len / 2, br);
+        p.copy(A).addScaledVector(d, len * 0.25); mat.compose(p, q, s); bm.setMatrixAt(k, mat); bm.setColorAt(k++, col.setHex(elInfo(atoms[i].el).color));
+        p.copy(A).addScaledVector(d, len * 0.75); mat.compose(p, q, s); bm.setMatrixAt(k, mat); bm.setColorAt(k++, col.setHex(elInfo(atoms[j].el).color));
+      }
+      bm.computeBoundingSphere();
+      content.add(bm);
+    }
+  }
+
+  // unit cell + supercell outline
+  if (o.cell) {
+    content.add(boxLines(M, [1, 1, 1], 0x9fd8ff, 0.95));
+    if (o.n.some(v => v > 1)) content.add(boxLines(M, o.n, 0x6a7f99, 0.5));
+  }
+
+  const centre = f2c(M, o.n.map(v => v / 2));
+  content.position.copy(centre).negate();
+  const corners = [];
+  for (const i of [0, 1]) for (const j of [0, 1]) for (const k of [0, 1]) corners.push(f2c(M, [i * o.n[0], j * o.n[1], k * o.n[2]]));
+  structSize = new THREE.Box3().setFromPoints(corners).getSize(new THREE.Vector3()).length();
+  if (!keepView) resetView();
+  $('meta').innerHTML = metaHTML(N, nb);
+}
+
+function boxLines(M, n, color, opacity) {
+  const P = (i, j, k) => f2c(M, [i * n[0], j * n[1], k * n[2]]);
+  const e = [[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1],[1,0,0,1,1,0],[1,0,0,1,0,1],[0,1,0,1,1,0],
+             [0,1,0,0,1,1],[0,0,1,1,0,1],[0,0,1,0,1,1],[1,1,0,1,1,1],[1,0,1,1,1,1],[0,1,1,1,1,1]];
+  const pts = [];
+  for (const [a, b, c, d, f, g] of e) pts.push(P(a, b, c), P(d, f, g));
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
+}
+
+function computeBonds(atoms, tolF, allowMM) {
+  const hasNon = atoms.some(a => NONMETALS.has(a.el));
+  let maxR = 0; for (const a of atoms) maxR = Math.max(maxR, elInfo(a.el).rcov);
+  const cs = 2 * maxR * tolF;
+  const key = (i, j, k) => ((i + 1000) * 2048 + (j + 1000)) * 2048 + (k + 1000);
+  const grid = new Map();
+  const cellOf = a => [Math.floor(a.c.x / cs), Math.floor(a.c.y / cs), Math.floor(a.c.z / cs)];
+  atoms.forEach((a, i) => { const [x, y, z] = cellOf(a); const kk = key(x, y, z); let l = grid.get(kk); if (!l) grid.set(kk, l = []); l.push(i); });
+  const bonds = [];
+  atoms.forEach((a, i) => {
+    const [x, y, z] = cellOf(a); const ra = elInfo(a.el).rcov; const na = NONMETALS.has(a.el);
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const l = grid.get(key(x + dx, y + dy, z + dz)); if (!l) continue;
+      for (const j of l) {
+        if (j <= i) continue;
+        const b = atoms[j];
+        if (!allowMM && hasNon && !na && !NONMETALS.has(b.el)) continue;
+        const d = a.c.distanceTo(b.c);
+        if (d > 0.4 && d < (ra + elInfo(b.el).rcov) * tolF) bonds.push([i, j]);
+      }
+    }
+  });
+  return bonds;
+}
+
+function metaHTML(N, nb) {
+  const c = crystal, f = x => +x.toFixed(4);
+  return `<div><b>${esc(c.name || 'Struttura')}</b> · ${formulaOf(c.atoms)}</div>
+  ${c.sg ? `<div><span class="k">Gruppo spaziale:</span> ${esc(c.sg)}</div>` : ''}
+  <div><span class="k">a, b, c:</span> ${f(c.a)}, ${f(c.b)}, ${f(c.c)} Å</div>
+  <div><span class="k">α, β, γ:</span> ${f(c.al)}°, ${f(c.be)}°, ${f(c.ga)}°</div>
+  <div><span class="k">Atomi/cella:</span> ${c.atoms.length} · <span class="k">op. simm.:</span> ${c.nOps}</div>
+  <div><span class="k">Visualizzati:</span> ${N.toLocaleString()} atomi, ${nb.toLocaleString()} legami</div>
+  ${c.symWarn ? '<div class="warn">Nessuna operazione di simmetria nel file: struttura trattata come P1.</div>' : ''}`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+/* ================= View / navigation ================= */
+let yaw = 0.6, pitch = -0.25, speedMul = 1;
+const keys = {};
+const UP = new THREE.Vector3(0, 1, 0);
+
+function resetView() {
+  world.scale.setScalar(1); world.position.set(0, 0, 0);
+  const d = Math.max(structSize * 1.1, 4);
+  yaw = 0.6; pitch = -Math.atan2(d * 0.3, d);
+  dolly.rotation.set(0, 0, 0);
+  dolly.position.set(Math.sin(yaw) * d, d * 0.3, Math.cos(yaw) * d);
+  camera.position.set(0, 0, 0);
+  updateScaleLabel();
+}
+function setupXRView() {
+  dolly.position.set(0, 0, 0); dolly.rotation.set(0, 0, 0);
+  const s = 1.0 / Math.max(structSize, 1);       // structure ~1 m wide
+  world.scale.setScalar(s); world.position.set(0, 1.25, -0.9);
+  grid.visible = true; updateScaleLabel();
+}
+function zoomAt(factor, pivot) {
+  const s = world.scale.x, ns = THREE.MathUtils.clamp(s * factor, 0.002, 200), f = ns / s;
+  world.position.sub(pivot).multiplyScalar(f).add(pivot);
+  world.scale.setScalar(ns); updateScaleLabel();
+}
+function headPos() { return camera.getWorldPosition(new THREE.Vector3()); }
+function updateScaleLabel() {
+  const m = world.scale.x;
+  const t = m >= 1 ? `${m.toFixed(2)} m` : m >= 0.01 ? `${(m * 100).toFixed(1)} cm` : `${(m * 1000).toFixed(2)} mm`;
+  $('scaleLbl').textContent = `1 Å = ${t}`;
+}
+
+/* ---- desktop input ---- */
+const canvas = renderer.domElement;
+const isLocked = () => document.pointerLockElement === canvas;
+const pointers = new Map(); let dragMoved = 0, pinchD = 0;
+const mouseNDC = new THREE.Vector2(9, 9);
+
+addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.type !== 'checkbox' && e.target.type !== 'range') return;
+  keys[e.code] = true;
+  if (e.code === 'KeyR') resetView();
+  if (e.code === 'Space') e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+canvas.addEventListener('pointerdown', e => {
+  if (isLocked()) { selectAtom(pickCenter()); return; }
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dragMoved = 0;
+  if (pointers.size === 2) { const [p, q] = [...pointers.values()]; pinchD = Math.hypot(p.x - q.x, p.y - q.y); }
+});
+canvas.addEventListener('pointermove', e => {
+  mouseNDC.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  lastMouse = { x: e.clientX, y: e.clientY };
+  if (isLocked()) { look(e.movementX, e.movementY, 0.0022); return; }
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pointers.size === 1) { dragMoved += Math.abs(dx) + Math.abs(dy); look(dx, dy, 0.005); }
+  else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinchD > 0) zoomAt(d / pinchD, headPos()); pinchD = d; dragMoved += 99;
+  }
+});
+const endPointer = e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0 && dragMoved < 6 && e.type === 'pointerup') selectAtom(pickMouse());
+  if (pointers.size < 2) pinchD = 0;
+};
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', e => { e.preventDefault(); zoomAt(Math.exp(-e.deltaY * 0.0015), headPos()); }, { passive: false });
+function look(dx, dy, k) { yaw -= dx * k; pitch = THREE.MathUtils.clamp(pitch - dy * k, -1.55, 1.55); }
+
+document.addEventListener('pointerlockchange', () => {
+  $('crosshair').style.display = isLocked() ? 'block' : 'none';
+  $('lock').textContent = isLocked() ? 'Esc per uscire' : 'Prima persona';
+});
+$('lock').onclick = async () => {
+  try { await canvas.requestPointerLock(); }
+  catch { msg('Cattura del mouse non disponibile in questa pagina: trascina con il mouse per guardare e usa WASD per muoverti.'); }
+};
+$('reset').onclick = () => resetView();
+$('zin').onclick = () => zoomAt(1.5, headPos());
+$('zout').onclick = () => zoomAt(1 / 1.5, headPos());
+document.querySelectorAll('#touchpad button').forEach(b => {
+  const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { e.preventDefault(); keys[k] = true; });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => keys[k] = false);
+});
+
+function updateDesktop(dt) {
+  dolly.rotation.set(0, yaw, 0);
+  camera.rotation.set(pitch, 0, 0);
+  dolly.updateMatrixWorld(true);
+  const fwd = camera.getWorldDirection(new THREE.Vector3());
+  const right = new THREE.Vector3().crossVectors(fwd, UP).normalize();
+  const k = c => keys[c] ? 1 : 0;
+  const f = k('KeyW') + k('ArrowUp') - k('KeyS') - k('ArrowDown');
+  const r = k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft');
+  const u = k('KeyE') + k('Space') - k('KeyQ') - k('KeyC');
+  if (f || r || u) {
+    const sp = 3 * speedMul * (keys.ShiftLeft || keys.ShiftRight ? 3 : 1) * dt;
+    dolly.position.addScaledVector(fwd, f * sp).addScaledVector(right, r * sp).addScaledVector(UP, u * sp);
+  }
+}
+
+/* ---- picking ---- */
+const raycaster = new THREE.Raycaster();
+const _inv = new THREE.Matrix4(), _ray = new THREE.Ray();
+function pickRay(ray) {
+  if (!pos) return null;
+  content.updateMatrixWorld(true);
+  _inv.copy(content.matrixWorld).invert();
+  const r = _ray.copy(ray).applyMatrix4(_inv), o = r.origin, d = r.direction;
+  let best = null, bt = Infinity;
+  for (let i = 0, n = rad.length; i < n; i++) {
+    const ox = pos[i * 3] - o.x, oy = pos[i * 3 + 1] - o.y, oz = pos[i * 3 + 2] - o.z;
+    const tca = ox * d.x + oy * d.y + oz * d.z; if (tca < 0) continue;
+    const d2 = ox * ox + oy * oy + oz * oz - tca * tca, r2 = rad[i] * rad[i];
+    if (d2 > r2) continue;
+    const t = tca - Math.sqrt(r2 - d2);
+    if (t > 0 && t < bt) { bt = t; best = i; }
+  }
+  return best;
+}
+function pickCenter() { raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); return pickRay(raycaster.ray); }
+function pickMouse() { raycaster.setFromCamera(mouseNDC, camera); return pickRay(raycaster.ray); }
+
+/* ---- selection, measurements, labels ---- */
+let selected = [];
+const selGroup = new THREE.Group(); content.add(selGroup);
+const selMat = new THREE.MeshBasicMaterial({ color: 0xffe14d, transparent: true, opacity: 0.35, depthWrite: false });
+const selLineMat = new THREE.LineBasicMaterial({ color: 0xffe14d, depthTest: false, transparent: true });
+let selLabel = null;
+
+function clearSelection() { selected = []; updateSelection(); }
+function selectAtom(i) {
+  if (i == null) { if (selected.length) clearSelection(); return; }
+  if (selected.length >= 3) selected = [];
+  if (selected[selected.length - 1] !== i) selected.push(i);
+  updateSelection();
+}
+function atomTxt(a) { return `${a.label} (${a.el})`; }
+function updateSelection() {
+  if (!content.children.includes(selGroup)) content.add(selGroup);
+  for (const ch of [...selGroup.children]) { selGroup.remove(ch); if (ch.isLine) ch.geometry.dispose(); }
+  if (selLabel) { scene.remove(selLabel); selLabel.material.map.dispose(); selLabel.material.dispose(); selLabel = null; }
+  if (!selected.length) {
+    $('sel').innerHTML = '<span style="color:var(--muted)">Clicca un atomo per selezionarlo. 2 atomi → distanza, 3 → angolo.</span>';
+    return;
+  }
+  const A = selected.map(i => atoms[i]);
+  A.forEach(a => { const m = new THREE.Mesh(sphereGeo, selMat); m.position.copy(a.c); m.scale.setScalar(a.r * 1.35 + 0.08); selGroup.add(m); });
+  if (A.length > 1) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(A.map(a => a.c)), selLineMat); l.renderOrder = 998; selGroup.add(l); }
+  const lines = [], html = [];
+  A.forEach((a, k) => html.push(`<div><span class="m">${k + 1}.</span> ${esc(atomTxt(a))}${a.occ < 1 ? ` · occ ${a.occ}` : ''}<br>
+    <span style="color:var(--muted)">frac</span> ${a.fs.map(v => v.toFixed(4)).join(', ')}</div>`));
+  const last = A[A.length - 1];
+  lines.push(atomTxt(last));
+  if (A.length >= 2) {
+    const d1 = A[0].c.distanceTo(A[1].c);
+    html.push(`<div class="m">d(1–2) = ${d1.toFixed(4)} Å</div>`);
+    if (A.length === 2) lines.push(`d = ${d1.toFixed(3)} Å`);
+  }
+  if (A.length === 3) {
+    const d2 = A[1].c.distanceTo(A[2].c);
+    const v1 = A[0].c.clone().sub(A[1].c), v2 = A[2].c.clone().sub(A[1].c);
+    const ang = THREE.MathUtils.radToDeg(v1.angleTo(v2));
+    html.push(`<div class="m">d(2–3) = ${d2.toFixed(4)} Å</div><div class="m">∠(1–2–3) = ${ang.toFixed(2)}°</div>`);
+    lines.push(`d = ${d2.toFixed(3)} Å`, `angolo = ${ang.toFixed(1)}°`);
+  }
+  html.push('<div style="margin-top:6px"><button id="clr">Deseleziona</button></div>');
+  $('sel').innerHTML = html.join('');
+  $('clr').onclick = clearSelection;
+  selLabel = makeLabel(lines.join('\n')); selLabel.userData.atom = last; scene.add(selLabel);
+}
+function makeLabel(text) {
+  const fs = 44, pad = 18, lines = text.split('\n');
+  const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+  ctx.font = `600 ${fs}px system-ui, sans-serif`;
+  const w = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width)) + pad * 2);
+  const h = Math.ceil(lines.length * fs * 1.25 + pad * 1.4);
+  cv.width = w; cv.height = h;
+  ctx.fillStyle = 'rgba(12,18,28,0.88)'; ctx.beginPath(); ctx.roundRect(0, 0, w, h, 16); ctx.fill();
+  ctx.strokeStyle = '#ffe14d'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.font = `600 ${fs}px system-ui, sans-serif`; ctx.fillStyle = '#fff'; ctx.textBaseline = 'top';
+  lines.forEach((l, i) => ctx.fillText(l, pad, pad * 0.7 + i * fs * 1.25));
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  sp.renderOrder = 999; sp.userData.aspect = w / h;
+  return sp;
+}
+function updateLabel() {
+  if (!selLabel) return;
+  const a = selLabel.userData.atom;
+  const p = content.localToWorld(a.c.clone());
+  const cam = headPos();
+  const dist = Math.max(p.distanceTo(cam), 0.05);
+  const h = dist * 0.07;
+  const upOff = (a.r + 0.15) * world.scale.x;
+  selLabel.position.copy(p).addScaledVector(UP, upOff + h * 0.6);
+  selLabel.scale.set(h * selLabel.userData.aspect, h, 1);
+}
+
+/* ---- hover tooltip ---- */
+let lastHover = 0, lastMouse = null;
+function updateHover(now) {
+  if (now - lastHover < 120) return; lastHover = now;
+  const hv = $('hover');
+  if (renderer.xr.isPresenting || pointers.size) { hv.style.display = 'none'; return; }
+  let i = null, x, y;
+  if (isLocked()) { i = pickCenter(); x = innerWidth / 2 + 14; y = innerHeight / 2 + 12; }
+  else if (lastMouse) { i = pickMouse(); x = lastMouse.x + 14; y = lastMouse.y + 12; }
+  if (i == null) { hv.style.display = 'none'; canvas.style.cursor = ''; return; }
+  hv.textContent = atomTxt(atoms[i]); hv.style.left = x + 'px'; hv.style.top = y + 'px'; hv.style.display = 'block';
+  canvas.style.cursor = 'pointer';
+}
+
+/* ================= WebXR ================= */
+const vrBtn = VRButton.createButton(renderer);
+document.body.appendChild(vrBtn);
+const factory = new XRControllerModelFactory();
+const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+const controllers = [0, 1].map(i => {
+  const c = renderer.xr.getController(i);
+  const line = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0x5cc8ff }));
+  line.scale.z = 6; c.add(line);
+  c.addEventListener('selectstart', () => {
+    const m = new THREE.Matrix4().extractRotation(c.matrixWorld);
+    const ray = new THREE.Ray(new THREE.Vector3().setFromMatrixPosition(c.matrixWorld), new THREE.Vector3(0, 0, -1).applyMatrix4(m).normalize());
+    selectAtom(pickRay(ray));
+  });
+  dolly.add(c);
+  const g = renderer.xr.getControllerGrip(i); g.add(factory.createControllerModel(g)); dolly.add(g);
+  return c;
+});
+renderer.xr.addEventListener('sessionstart', () => { setupXRView(); $('panel').style.display = 'none'; });
+renderer.xr.addEventListener('sessionend', () => { grid.visible = false; $('panel').style.display = ''; resetView(); });
+
+let snapLatch = false;
+function updateXR(dt) {
+  const session = renderer.xr.getSession(); if (!session) return;
+  const head = headPos();
+  const dir = camera.getWorldDirection(new THREE.Vector3());
+  const right = new THREE.Vector3().crossVectors(dir, UP).normalize();
+  for (const src of session.inputSources) {
+    const gp = src.gamepad; if (!gp) continue;
+    const x = gp.axes.length >= 4 ? gp.axes[2] : (gp.axes[0] || 0);
+    const y = gp.axes.length >= 4 ? gp.axes[3] : (gp.axes[1] || 0);
+    const sp = 1.5 * speedMul * dt;
+    if (src.handedness === 'left') {
+      if (Math.abs(x) > 0.15 || Math.abs(y) > 0.15)
+        dolly.position.addScaledVector(dir, -y * sp).addScaledVector(right, x * sp);
+    } else {
+      if (Math.abs(y) > 0.2) zoomAt(Math.exp(-y * dt * 1.6), head);
+      if (Math.abs(x) > 0.7 && !snapLatch) {
+        const ang = -Math.sign(x) * Math.PI / 6;
+        dolly.position.sub(head).applyAxisAngle(UP, ang).add(head);
+        dolly.rotation.y += ang; snapLatch = true;
+      } else if (Math.abs(x) < 0.3) snapLatch = false;
+    }
+    if (gp.buttons[4]?.pressed) dolly.position.addScaledVector(UP, sp);
+    if (gp.buttons[5]?.pressed) dolly.position.addScaledVector(UP, -sp);
+  }
+}
+
+/* ================= Loading ================= */
+function msg(t, warn) {
+  const m = $('msg'); m.innerHTML = warn ? `<span class="warn">${esc(t)}</span>` : esc(t); m.style.display = 'block';
+  clearTimeout(msg._t); msg._t = setTimeout(() => m.style.display = 'none', 6000);
+}
+function loadText(text, label) {
+  try {
+    crystal = buildCrystal(text);
+    if (!crystal.name) crystal.name = label;
+    rebuild();
+  } catch (e) { console.error(e); msg('Errore nel file CIF: ' + e.message, true); }
+}
+$('file').onchange = e => { const f = e.target.files[0]; if (f) f.text().then(t => loadText(t, f.name.replace(/\.cif$/i, ''))); e.target.value = ''; };
+$('example').onchange = e => { const v = e.target.value; if (v) loadText(EXAMPLES[v], v); e.target.value = ''; };
+for (const id of ['nx', 'ny', 'nz', 'style', 'boundary', 'showCell', 'mm']) $(id).addEventListener('change', () => rebuild(true));
+$('tol').addEventListener('input', () => $('tolv').textContent = (+$('tol').value).toFixed(2));
+$('tol').addEventListener('change', () => rebuild(true));
+$('spd').addEventListener('input', () => { speedMul = +$('spd').value; $('spdv').textContent = speedMul.toFixed(1); });
+$('collapse').onclick = () => { const p = $('panel'); p.classList.toggle('collapsed'); $('collapse').textContent = p.classList.contains('collapsed') ? '+' : '–'; };
+if (innerWidth < 600) { $('panel').classList.add('collapsed'); $('collapse').textContent = '+'; }
+
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').style.display = 'flex'; });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('drop').style.display = 'none'; } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; $('drop').style.display = 'none';
+  const f = e.dataTransfer.files[0]; if (f) f.text().then(t => loadText(t, f.name.replace(/\.cif$/i, '')));
+});
+
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(now => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  if (renderer.xr.isPresenting) updateXR(dt); else updateDesktop(dt);
+  updateLabel();
+  updateHover(now);
+  renderer.render(scene, camera);
+});
+
+loadText(EXAMPLES.rutile, 'rutile');
+window.__cw = { loadText, get atoms() { return atoms; }, selectAtom, get crystal() { return crystal; } };
+</script>
+
+</body>
+</html>
